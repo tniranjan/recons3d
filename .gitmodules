@@ -1,0 +1,9 @@
+[submodule "third_party/LightGlue"]
+	path = third_party/LightGlue
+	url = git@github.com:cvg/LightGlue.git
+[submodule "third_party/ALIKED"]
+	path = third_party/ALIKED
+	url = git@github.com:Shiaoming/ALIKED.git
+[submodule "third_party/d2-net"]
+	path = third_party/d2-net
+	url = git@github.com:mihaidusmanu/d2-net.git

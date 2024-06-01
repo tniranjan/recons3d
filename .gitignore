@@ -1,3 +1,9 @@
+0/
+1/
+2/
+dataset/
+outputs/
+scratch/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
