@@ -6,18 +6,18 @@ _EPS = np.finfo(float).eps * 4.0
 
 # mAA evaluation thresholds per scene, different accoring to the scene
 translation_thresholds_meters_dict = {
- 'multi-temporal-temple-baalshamin':  np.array([0.025,  0.05,  0.1,  0.2,  0.5,  1.0]),
- 'pond':                              np.array([0.025,  0.05,  0.1,  0.2,  0.5,  1.0]),
- 'transp_obj_glass_cylinder':         np.array([0.0025, 0.005, 0.01, 0.02, 0.05, 0.1]),
- 'transp_obj_glass_cup':              np.array([0.0025, 0.005, 0.01, 0.02, 0.05, 0.1]),
- 'church':                            np.array([0.025,  0.05,  0.1,  0.2,  0.5,  1.0]),
- 'lizard':                            np.array([0.025,  0.05,  0.1,  0.2,  0.5,  1.0]),
- 'dioscuri':                          np.array([0.025,  0.05,  0.1,  0.2,  0.5,  1.0]), 
+    "multi-temporal-temple-baalshamin": np.array([0.025, 0.05, 0.1, 0.2, 0.5, 1.0]),
+    "pond": np.array([0.025, 0.05, 0.1, 0.2, 0.5, 1.0]),
+    "transp_obj_glass_cylinder": np.array([0.0025, 0.005, 0.01, 0.02, 0.05, 0.1]),
+    "transp_obj_glass_cup": np.array([0.0025, 0.005, 0.01, 0.02, 0.05, 0.1]),
+    "church": np.array([0.025, 0.05, 0.1, 0.2, 0.5, 1.0]),
+    "lizard": np.array([0.025, 0.05, 0.1, 0.2, 0.5, 1.0]),
+    "dioscuri": np.array([0.025, 0.05, 0.1, 0.2, 0.5, 1.0]),
 }
 
 
 def vector_norm(data, axis=None, out=None):
-    '''Return length, i.e. Euclidean norm, of ndarray along axis.'''
+    """Return length, i.e. Euclidean norm, of ndarray along axis."""
     data = np.array(data, dtype=np.float64, copy=True)
     if out is None:
         if data.ndim == 1:
@@ -33,7 +33,7 @@ def vector_norm(data, axis=None, out=None):
 
 
 def quaternion_matrix(quaternion):
-    '''Return homogeneous rotation matrix from quaternion.'''
+    """Return homogeneous rotation matrix from quaternion."""
     q = np.array(quaternion, dtype=np.float64, copy=True)
     n = np.dot(q, q)
     if n < _EPS:
@@ -68,7 +68,7 @@ def quaternion_matrix(quaternion):
 
 # based on the 3D registration from https://github.com/cgohlke/transformations
 def affine_matrix_from_points(v0, v1, shear=False, scale=True, usesvd=True):
-    
+
     v0 = np.array(v0, dtype=np.float64, copy=True)
     v1 = np.array(v1, dtype=np.float64, copy=True)
 
@@ -92,7 +92,7 @@ def affine_matrix_from_points(v0, v1, shear=False, scale=True, usesvd=True):
         u, s, vh = np.linalg.svd(A.T)
         vh = vh[:ndims].T
         B = vh[:ndims]
-        C = vh[ndims: 2 * ndims]
+        C = vh[ndims : 2 * ndims]
         t = np.dot(C, np.linalg.pinv(B))
         t = np.concatenate((t, np.zeros((ndims, 1))), axis=1)
         M = np.vstack((t, ((0.0,) * ndims) + (1.0,)))
@@ -145,7 +145,7 @@ def affine_matrix_from_points(v0, v1, shear=False, scale=True, usesvd=True):
 
 # This is the IMC 3D error metric code
 def register_by_Horn(ev_coord, gt_coord, ransac_threshold, inl_cf, strict_cf):
-    
+
     # remove invalid cameras, the index is returned
     idx_cams = np.all(np.isfinite(ev_coord), axis=0)
     ev_coord = ev_coord[:, idx_cams]
@@ -166,9 +166,9 @@ def register_by_Horn(ev_coord, gt_coord, ransac_threshold, inl_cf, strict_cf):
     triplets_used = np.zeros((3, r))
 
     # run on camera triplets
-    for ii in range(n-2):
-        for jj in range(ii+1, n-1):
-            for kk in range(jj+1, n):
+    for ii in range(n - 2):
+        for jj in range(ii + 1, n - 1):
+            for kk in range(jj + 1, n):
                 i = [ii, jj, kk]
                 triplets_used_now = np.full((n), False)
                 triplets_used_now[i] = True
@@ -176,32 +176,46 @@ def register_by_Horn(ev_coord, gt_coord, ransac_threshold, inl_cf, strict_cf):
                 if np.all(strict_inl[i]):
                     continue
                 # get transformation T by Horn on the triplet camera center correspondences
-                transf_matrix = affine_matrix_from_points(ev_coord[:, i], gt_coord[:, i], usesvd=False)
+                transf_matrix = affine_matrix_from_points(
+                    ev_coord[:, i], gt_coord[:, i], usesvd=False
+                )
                 # apply transformation T to test camera centres
                 rotranslated = np.matmul(transf_matrix[:3], ev_coord_1)
                 # compute error and inliers
-                err = np.sum((rotranslated - gt_coord)**2, axis=0)
+                err = np.sum((rotranslated - gt_coord) ** 2, axis=0)
                 inl = np.expand_dims(err, axis=1) < ransac_threshold2
                 no_inl = np.sum(inl, axis=0)
                 # if the number of inliers is close to that of the best model so far, go for refinement
-                to_ref = np.squeeze(((no_inl > 2) & (no_inl > max_no_inl * inl_cf)), axis=0)
-                for q in np.argwhere(to_ref):                        
+                to_ref = np.squeeze(
+                    ((no_inl > 2) & (no_inl > max_no_inl * inl_cf)), axis=0
+                )
+                for q in np.argwhere(to_ref):
                     qq = q[0]
-                    if np.any(np.all((np.expand_dims(inl[:, qq], axis=1) == inl[:, :qq]), axis=0)):
+                    if np.any(
+                        np.all(
+                            (np.expand_dims(inl[:, qq], axis=1) == inl[:, :qq]), axis=0
+                        )
+                    ):
                         # already done for this set of inliers
                         continue
                     # get transformation T by Horn on the inlier camera center correspondences
-                    transf_matrix = affine_matrix_from_points(ev_coord[:, inl[:, qq]], gt_coord[:, inl[:, qq]])
+                    transf_matrix = affine_matrix_from_points(
+                        ev_coord[:, inl[:, qq]], gt_coord[:, inl[:, qq]]
+                    )
                     # apply transformation T to test camera centres
                     rotranslated = np.matmul(transf_matrix[:3], ev_coord_1)
                     # compute error and inliers
-                    err_ref = np.sum((rotranslated - gt_coord)**2, axis=0)
+                    err_ref = np.sum((rotranslated - gt_coord) ** 2, axis=0)
                     err_ref_sum = np.sum(err_ref, axis=0)
                     err_ref = np.expand_dims(err_ref, axis=1)
                     inl_ref = err_ref < ransac_threshold2
                     no_inl_ref = np.sum(inl_ref, axis=0)
                     # update the model if better for each threshold
-                    to_update = np.squeeze((no_inl_ref > max_no_inl) | ((no_inl_ref == max_no_inl) & (err_ref_sum < best_inl_err)), axis=0)
+                    to_update = np.squeeze(
+                        (no_inl_ref > max_no_inl)
+                        | ((no_inl_ref == max_no_inl) & (err_ref_sum < best_inl_err)),
+                        axis=0,
+                    )
                     if np.any(to_update):
                         triplets_used[0, to_update] = ii
                         triplets_used[1, to_update] = jj
@@ -209,26 +223,34 @@ def register_by_Horn(ev_coord, gt_coord, ransac_threshold, inl_cf, strict_cf):
                         max_no_inl[:, to_update] = no_inl_ref[to_update]
                         best_err[:, to_update] = np.sqrt(err_ref)
                         best_inl_err[to_update] = err_ref_sum
-                        strict_inl[:, to_update] = (best_err[:, to_update] < strict_cf * ransac_threshold[:, to_update])
+                        strict_inl[:, to_update] = (
+                            best_err[:, to_update]
+                            < strict_cf * ransac_threshold[:, to_update]
+                        )
                         best_transf_matrix[to_update] = transf_matrix
 
-#     for i in range(r):
-#        print(f'Registered cameras {int(max_no_inl[0, i])}/{n} for threshold {ransac_threshold[0, i]}')
+    #     for i in range(r):
+    #        print(f'Registered cameras {int(max_no_inl[0, i])}/{n} for threshold {ransac_threshold[0, i]}')
 
     best_model = {
-        "valid_cams": idx_cams,        
+        "valid_cams": idx_cams,
         "no_inl": max_no_inl,
         "err": best_err,
         "triplets_used": triplets_used,
-        "transf_matrix": best_transf_matrix}
+        "transf_matrix": best_transf_matrix,
+    }
     return best_model
 
 
 # mAA computation
 def mAA_on_cameras(err, thresholds, n, skip_top_thresholds, to_dec=3):
-    
-    aux = err[:, skip_top_thresholds:] < np.expand_dims(np.asarray(thresholds[skip_top_thresholds:]), axis=0)
-    return np.sum(np.maximum(np.sum(aux, axis=0) - to_dec, 0)) / (len(thresholds[skip_top_thresholds:]) * (n - to_dec))
+
+    aux = err[:, skip_top_thresholds:] < np.expand_dims(
+        np.asarray(thresholds[skip_top_thresholds:]), axis=0
+    )
+    return np.sum(np.maximum(np.sum(aux, axis=0) - to_dec, 0)) / (
+        len(thresholds[skip_top_thresholds:]) * (n - to_dec)
+    )
 
 
 # import data - no error handling in case float(x) fails
@@ -236,48 +258,61 @@ def get_camera_centers_from_df(df):
     out = {}
     for row in df.iterrows():
         row = row[1]
-        fname = row['image_path']
-        R = np.array([float(x) for x in (row['rotation_matrix'].split(';'))]).reshape(3,3)
-        t = np.array([float(x) for x in (row['translation_vector'].split(';'))]).reshape(3)
+        fname = row["image_path"]
+        R = np.array([float(x) for x in (row["rotation_matrix"].split(";"))]).reshape(
+            3, 3
+        )
+        t = np.array(
+            [float(x) for x in (row["translation_vector"].split(";"))]
+        ).reshape(3)
         center = -R.T @ t
         out[fname] = center
     return out
 
 
-def evaluate_rec(gt_df, user_df, inl_cf = 0.8, strict_cf=0.5, skip_top_thresholds=2, to_dec=3,
-                 thresholds=[0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.15, 0.2]):
+def evaluate_rec(
+    gt_df,
+    user_df,
+    inl_cf=0.8,
+    strict_cf=0.5,
+    skip_top_thresholds=2,
+    to_dec=3,
+    thresholds=[0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.15, 0.2],
+):
     # get camera centers
     ucameras = get_camera_centers_from_df(user_df)
-    gcameras = get_camera_centers_from_df(gt_df)    
+    gcameras = get_camera_centers_from_df(gt_df)
 
     # the denominator for mAA ratio
     m = gt_df.shape[0]
-    
+
     # get the image list to use
     good_cams = []
     for image_path in gcameras.keys():
         if image_path in ucameras.keys():
             good_cams.append(image_path)
-        
+
     # put corresponding camera centers into matrices
     n = len(good_cams)
     u_cameras = np.zeros((3, n))
     g_cameras = np.zeros((3, n))
-    
+
     ii = 0
     for i in good_cams:
         u_cameras[:, ii] = ucameras[i]
         g_cameras[:, ii] = gcameras[i]
         ii += 1
-        
+
     # Horn camera centers registration, a different best model for each camera threshold
-    model = register_by_Horn(u_cameras, g_cameras, np.asarray(thresholds), inl_cf, strict_cf)
-    
+    model = register_by_Horn(
+        u_cameras, g_cameras, np.asarray(thresholds), inl_cf, strict_cf
+    )
+
     # transformation matrix
-#     print("\nTransformation matrix for maximum threshold")
-    T = np.squeeze(model['transf_matrix'][-1])
-#     print(T)
-    
+    #     print("\nTransformation matrix for maximum threshold")
+    T = np.squeeze(model["transf_matrix"][-1])
+    #     print(T)
+
     # mAA
     mAA = mAA_on_cameras(model["err"], thresholds, m, skip_top_thresholds, to_dec)
     # print(f'mAA = {mAA * 100 : .2f}% considering {m} input cameras - {to_dec}')
@@ -285,20 +320,27 @@ def evaluate_rec(gt_df, user_df, inl_cf = 0.8, strict_cf=0.5, skip_top_threshold
 
 
 def score(solution: pd.DataFrame, submission: pd.DataFrame) -> float:
-    
-    scenes = list(set(solution['dataset'].tolist()))
+
+    scenes = list(set(solution["dataset"].tolist()))
     results_per_dataset = []
     for dataset in scenes:
         print(f"\n*** {dataset} ***")
-#         start = time.time()
-        gt_ds = solution[solution['dataset'] == dataset]
-        user_ds = submission[submission['dataset'] == dataset]
-        gt_ds = gt_ds.sort_values(by=['image_path'], ascending = True)
-        user_ds = user_ds.sort_values(by=['image_path'], ascending = True)
-        result = evaluate_rec(gt_ds, user_ds, inl_cf=0, strict_cf=-1, skip_top_thresholds=0, to_dec=3,
-                 thresholds=translation_thresholds_meters_dict[dataset])
-#         end = time.time()
+        #         start = time.time()
+        gt_ds = solution[solution["dataset"] == dataset]
+        user_ds = submission[submission["dataset"] == dataset]
+        gt_ds = gt_ds.sort_values(by=["image_path"], ascending=True)
+        user_ds = user_ds.sort_values(by=["image_path"], ascending=True)
+        result = evaluate_rec(
+            gt_ds,
+            user_ds,
+            inl_cf=0,
+            strict_cf=-1,
+            skip_top_thresholds=0,
+            to_dec=3,
+            thresholds=translation_thresholds_meters_dict[dataset],
+        )
+        #         end = time.time()
         print(f"\nmAA: {round(result,4)}")
-#         print("Running time: %s" % (end - start))        
+        #         print("Running time: %s" % (end - start))
         results_per_dataset.append(result)
     return float(np.array(results_per_dataset).mean())
