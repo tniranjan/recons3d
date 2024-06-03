@@ -5,5 +5,5 @@
 	path = third_party/ALIKED
 	url = git@github.com:Shiaoming/ALIKED.git
 [submodule "third_party/d2-net"]
-	path = third_party/d2-net
+	path = third_party/d2net
 	url = git@github.com:mihaidusmanu/d2-net.git

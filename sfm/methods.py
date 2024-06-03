@@ -1,7 +1,7 @@
 import kornia as K
 import kornia.feature as KF
 from lightglue.utils import load_image
-from lightglue import LightGlue, ALIKED, match_pair
+import lightglue
 import h5py
 import pycolmap
 import torch
@@ -13,28 +13,47 @@ from copy import deepcopy
 sys.path.append("colmap-db-import")
 from database import *
 from h5_to_db import *
+import sfm.d2net
+import cv2
 
-
-def keypoints_matches(images_list, pairs, config):
-    extractor = (
-        ALIKED(
-            max_num_keypoints=config["max_kp"],
-            detection_threshold=config["detection_threshold"],
-            resize=config["resize_to"],
-        ).eval().to(config["device"])
-    )
-    matcher = (
-        KF.LightGlueMatcher(
-            "aliked",
-            {
-                "width_confidence": -1,
-                "depth_confidence": -1,
-                "mp": True if "cuda" in str(config["device"]) else False,
-            },
-        )
-        .eval()
-        .to(config["device"])
-    )
+def keypoints_matches(images_list, pairs, config, kp_method="ALIKED"):
+    if kp_method == "ALIKED":
+        extractor = lightglue.ALIKED(
+                max_num_keypoints=config["max_kp"],
+                detection_threshold=config["detection_threshold"],
+                resize=config["resize_to"],
+            ).eval().to(config["device"])
+    elif kp_method == "SuperPoint":
+        extractor = lightglue.SuperPoint(
+                max_num_keypoints=config["max_kp"],
+                detection_threshold=config["detection_threshold"],
+                resize=config["resize_to"],
+            ).eval().to(config["device"])
+    elif kp_method == "DISK":
+        extractor = lightglue.DISK(
+                max_num_keypoints=config["max_kp"],
+                detection_threshold=config["detection_threshold"],
+                resize=config["resize_to"],
+            ).eval().to(config["device"])
+    elif kp_method == "SIFT":
+        extractor = lightglue.SIFT(
+                max_num_keypoints=config["max_kp"],
+                detection_threshold=config["detection_threshold"],
+                resize=config["resize_to"],
+            ).eval().to(config["device"])
+    elif kp_method == "DoGHardNet":
+        extractor = lightglue.DoGHardNet(
+                max_num_keypoints=config["max_kp"],
+                detection_threshold=config["detection_threshold"],
+                resize=config["resize_to"],
+            ).eval().to(config["device"])
+    elif kp_method == "D2Net":
+        extractor = sfm.d2net.D2NetExtractor(max_kp=config["max_kp"], detection_threshold= config["detection_threshold"], resize_to=config["resize_to"]) 
+    else:
+        raise RuntimeError("Unknown method")
+    
+    matcher = cv2.BFMatcher(cv2.NORM_L2, True) if kp_method == "D2Net" else KF.LightGlueMatcher(kp_method.lower(),{"width_confidence": -1, "depth_confidence": -1, "mp": True if "cuda" in str(config["device"]) else False, },).eval().to(config["device"])
+    
     # rotation = create_model("swsl_resnext50_32x4d").eval().to(device)
     keypoints_fname = "scratch/keypoints.h5"
     desc_fname = "scratch/descriptors.h5"
@@ -44,9 +63,12 @@ def keypoints_matches(images_list, pairs, config):
     ) as f_desc:
         for image_path in images_list:
             with torch.inference_mode():
-                image = load_image(image_path).to(config["device"])
-                # if image_path.parts[-3] in ROTATE_DATASET: image = rotate_image(image,rotation)
-                feats = extractor.extract(image)
+                if kp_method != "D2Net":
+                    image = load_image(image_path).to(config["device"])
+                    feats = extractor.extract(image)
+                else:
+                    feats = extractor.extract(image_path)
+
                 f_kp[image_path.name] = (
                     feats["keypoints"].reshape(-1, 2).detach().cpu().numpy()
                 )
@@ -63,22 +85,39 @@ def keypoints_matches(images_list, pairs, config):
     ) as f_desc, h5py.File(matches_fname, mode="w") as f_matches:
         for pair in pairs:
             key1, key2 = images_list[pair[0]].name, images_list[pair[1]].name
-            kp1 = torch.from_numpy(f_kp[key1][...]).to(config["device"])
-            kp2 = torch.from_numpy(f_kp[key2][...]).to(config["device"])
-            desc1 = torch.from_numpy(f_desc[key1][...]).to(config["device"])
-            desc2 = torch.from_numpy(f_desc[key2][...]).to(config["device"])
-            with torch.inference_mode():
-                _, idxs = matcher(
-                    desc1,
-                    desc2,
-                    KF.laf_from_center_scale_ori(kp1[None]),
-                    KF.laf_from_center_scale_ori(kp2[None]),
-                )
+            if kp_method!="D2Net":
+                kp1 = torch.from_numpy(f_kp[key1][...]).to(config["device"])
+                kp2 = torch.from_numpy(f_kp[key2][...]).to(config["device"])
+                desc1 = torch.from_numpy(f_desc[key1][...]).to(config["device"])
+                desc2 = torch.from_numpy(f_desc[key2][...]).to(config["device"])
+                with torch.inference_mode():
+                    _, idxs = matcher(
+                        desc1,
+                        desc2,
+                        KF.laf_from_center_scale_ori(kp1[None]),
+                        KF.laf_from_center_scale_ori(kp2[None]),
+                    )
+                    idxs = idxs.detach().cpu().numpy().reshape(-1, 2)
+            else:
+                kp1 = f_kp[key1]
+                kp2 = f_kp[key2]
+                desc1 = f_desc[key1]
+                desc2 = f_desc[key2]
+                matches = matcher.match(desc1, desc2 )
+                matches = (sorted(matches, key=lambda x: x.distance))
+                idxs = np.array([[match.queryIdx, match.trainIdx] for match in matches])
+
+                # marches = matcher(
+                #         desc1,
+                #         desc2,
+                #         KF.laf_from_center_scale_ori(kp1[None]),
+                #         KF.laf_from_center_scale_ori(kp2[None]),
+                #     )
             if len(idxs):
                 group = f_matches.require_group(key1)
             if len(idxs) >= config["min_matches"]:
                 group.create_dataset(
-                    key2, data=idxs.detach().cpu().numpy().reshape(-1, 2)
+                    key2, data=idxs
                 )
 
 
@@ -122,11 +161,11 @@ def get_unique_idxs(A, dim=0):
     return first_indices
 
 
-def match_loftr(images_list, pairs, device, one, two, resize_to, min_matches=15):
+def match_loftr(images_list, pairs, config):
     matcher = KF.LoFTR(pretrained="outdoor")
-    matcher = matcher.to(device).eval()
+    matcher = matcher.to(config["device"]).eval()
     matches_fname = "scratch/matches.h5"
-    features_fname = "scratch/features.h5"
+    features_fname = "scratch/keypoints.h5"
     # First we do pairwise matching, and then extract "keypoints" from loftr matches.
     with h5py.File(matches_fname, mode="w") as f_match:
         for pair_idx in pairs:
@@ -139,7 +178,7 @@ def match_loftr(images_list, pairs, device, one, two, resize_to, min_matches=15)
             )
             H1, W1 = timg1.shape[2:]
             timg_resized1 = K.geometry.resize(
-                timg1, resize_to, side="long", antialias=True
+                timg1, config["resize_to"], side="long", antialias=True
             )
             h1, w1 = timg_resized1.shape[2:]
 
@@ -150,13 +189,13 @@ def match_loftr(images_list, pairs, device, one, two, resize_to, min_matches=15)
             H2, W2 = timg2.shape[2:]
 
             timg_resized2 = K.geometry.resize(
-                timg2, resize_to, side="long", antialias=True
+                timg2, config["resize_to"], side="long", antialias=True
             )
             h2, w2 = timg_resized2.shape[2:]
             with torch.inference_mode():
                 input_dict = {
-                    "image0": timg_resized1.to(device),
-                    "image1": timg_resized2.to(device),
+                    "image0": timg_resized1.to(config["device"]),
+                    "image1": timg_resized2.to(config["device"]),
                 }
                 correspondences = matcher(input_dict)
             mkpts0 = correspondences["keypoints0"].cpu().numpy()
@@ -170,7 +209,7 @@ def match_loftr(images_list, pairs, device, one, two, resize_to, min_matches=15)
 
             n_matches = len(mkpts1)
             group = f_match.require_group(key1)
-            if n_matches >= min_matches:
+            if n_matches >= config["min_matches"]:
                 group.create_dataset(
                     key2, data=np.concatenate([mkpts0, mkpts1], axis=1)
                 )
