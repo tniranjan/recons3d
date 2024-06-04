@@ -10,7 +10,8 @@ import json
 import subprocess
 from ruamel.yaml import YAML
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
-
+import numpy as np
+from pathlib import Path
 
 def colmap_to_df(recons_path, input_df):
     recons = pycolmap.Reconstruction()
@@ -44,9 +45,11 @@ def compute_score(recons_path, dataset):
     gt_df =  pd.read_csv("./dataset/train/train_labels.csv")
     gt_df = gt_df[gt_df["dataset"]==dataset]
     gt_df = gt_df.apply(image_path, axis=1).drop_duplicates(subset=['image_path'])
-    colmap_df = colmap_to_df(recons_path, gt_df)
+    aliked_df = pd.read_csv("outputs/ALIKED_" + dataset + "_pred.csv")
+    gt_subset_df = pd.merge(aliked_df[["image_path"]], gt_df, on = "image_path")
+    colmap_df = colmap_to_df(recons_path, gt_subset_df)
     colmap_df.to_csv("outputs/dfsfm_" + dataset + "_pred.csv")    
-    return sfm.metric.score(gt_df, colmap_df)
+    return sfm.metric.score(gt_subset_df, colmap_df)
 
 def update_dfsfmyaml(dataset):
     file_path =  "/home/niranjan/DetectorFreeSfM/hydra_configs/demo/dfsfm.yaml"
@@ -77,7 +80,8 @@ def make_dfsfm_data(dataset):
     update_dfsfmyaml(dataset)
 
 def run_dfsfm():
-    datasets = ["dioscuri","lizard", "multi-temporal-temple-baalshamin", "pond", "transp_obj_glass_cup", "transp_obj_glass_cylinder", "church"]
+    datasets = ["multi-temporal-temple-baalshamin", "pond", "transp_obj_glass_cup", "transp_obj_glass_cylinder"]
+    # datasets = ["dioscuri","lizard", "multi-temporal-temple-baalshamin", "pond", "transp_obj_glass_cup", "transp_obj_glass_cylinder", "church"]
     scores = {}
     for dataset in datasets:
         make_dfsfm_data(dataset)
