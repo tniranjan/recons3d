@@ -147,6 +147,7 @@ def ransac_and_sparse_reconstruction(images_path, config):
             }
         ),
     )
+    maps[0].write_binary("dataset/train/pond_short/")
     return maps
 
 
